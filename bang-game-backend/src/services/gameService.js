@@ -266,6 +266,30 @@ class GameService {
         }
         break;
 
+      case CardTypes.SALOON:
+        // All players recover 1 life
+        gameState.players.forEach(p => {
+          if (!p.isDead && p.life < p.maxLife) {
+            p.life = Math.min(p.life + 1, p.maxLife);
+          }
+        });
+        gameState.gameLog.push(`${player.name} played Saloon - All players recover 1 life`);
+        break;
+
+      case CardTypes.STAGECOACH:
+        this.drawCardsForPlayer(gameState, player, 2);
+        gameState.gameLog.push(`${player.name} drew 2 cards from Stagecoach`);
+        break;
+
+      case CardTypes.WELLS_FARGO:
+        this.drawCardsForPlayer(gameState, player, 3);
+        gameState.gameLog.push(`${player.name} drew 3 cards from Wells Fargo`);
+        break;
+
+      case CardTypes.GENERAL_STORE:
+        this.handleGeneralStore(gameState, player);
+        break;
+
       case CardTypes.MISSED:
         throw new Error('Can only play Missed! in response to BANG!');
 
@@ -276,6 +300,45 @@ class GameService {
         }
         this.handleDiscard(gameState, player, targetPlayer, card);
         break;
+
+      case CardTypes.DUEL:
+        if (!targetPlayer) {
+          throw new Error('Must target a player');
+        }
+        this.handleDuel(gameState, player, targetPlayer);
+        break;
+
+      case CardTypes.INDIANS:
+        this.handleIndians(gameState, player);
+        break;
+
+      case CardTypes.GATLING:
+        this.handleGatling(gameState, player);
+        break;
+
+      case CardTypes.BARREL:
+      case CardTypes.MUSTANG:
+      case CardTypes.SCOPE:
+      case CardTypes.DYNAMITE:
+      case CardTypes.JAIL:
+        player.equipment.push(card);
+        gameState.gameLog.push(`${player.name} equipped ${card.type}`);
+        // Don't discard equipment cards
+        player.hand.splice(cardIndex, 1);
+        return room;
+
+      case CardTypes.VOLCANIC:
+      case CardTypes.SCHOFIELD:
+      case CardTypes.REMINGTON:
+      case CardTypes.REV_CARABINE:
+      case CardTypes.WINCHESTER:
+        if (player.weapon) {
+          gameState.discardPile.push(player.weapon);
+        }
+        player.weapon = card;
+        gameState.gameLog.push(`${player.name} equipped ${card.type}`);
+        player.hand.splice(cardIndex, 1);
+        return room;
 
       default:
         // Handle other cards
@@ -363,6 +426,148 @@ class GameService {
 
     gameState.discardPile.push(discardedCard);
     gameState.gameLog.push(`${player.name} discarded a card from ${target.name}`);
+  }
+
+  drawCardsForPlayer(gameState, player, count) {
+    for (let i = 0; i < count; i++) {
+      if (gameState.deck.length === 0) {
+        gameState.deck = shuffleDeck([...gameState.discardPile]);
+        gameState.discardPile = [];
+      }
+      if (gameState.deck.length > 0) {
+        player.hand.push(gameState.deck.shift());
+      }
+    }
+  }
+
+  handleGeneralStore(gameState, player) {
+    const revealedCards = [];
+    const alivePlayers = gameState.players.filter(p => !p.isDead);
+    
+    for (let i = 0; i < alivePlayers.length; i++) {
+      if (gameState.deck.length === 0) {
+        gameState.deck = shuffleDeck([...gameState.discardPile]);
+        gameState.discardPile = [];
+      }
+      if (gameState.deck.length > 0) {
+        revealedCards.push(gameState.deck.shift());
+      }
+    }
+
+    // Simplified: Give each player a random card from the revealed cards
+    alivePlayers.forEach(p => {
+      if (revealedCards.length > 0) {
+        const randomIndex = Math.floor(Math.random() * revealedCards.length);
+        p.hand.push(revealedCards.splice(randomIndex, 1)[0]);
+      }
+    });
+
+    gameState.gameLog.push(`${player.name} played General Store - All players drew a card`);
+  }
+
+  handleDuel(gameState, player, target) {
+    gameState.gameLog.push(`${player.name} challenges ${target.name} to a Duel!`);
+    
+    // Set up awaiting response for duel
+    gameState.awaitingResponse = {
+      type: 'DUEL',
+      challenger: player.id,
+      target: target.id,
+      currentResponder: target.id
+    };
+  }
+
+  respondToDuel(roomId, playerId, bangCardId) {
+    const room = this.rooms.get(roomId);
+    if (!room || !room.gameState) {
+      throw new Error('Game not found');
+    }
+
+    const gameState = room.gameState;
+    if (!gameState.awaitingResponse || gameState.awaitingResponse.type !== 'DUEL') {
+      throw new Error('Not awaiting DUEL response');
+    }
+
+    const responder = gameState.players.find(p => p.id === playerId);
+    if (!responder || responder.id !== gameState.awaitingResponse.currentResponder) {
+      throw new Error('Invalid response');
+    }
+
+    if (!bangCardId) {
+      // Player doesn't have BANG! or chooses not to play
+      responder.life--;
+      gameState.gameLog.push(`${responder.name} cannot respond - takes 1 damage`);
+      
+      if (responder.life <= 0) {
+        this.eliminatePlayer(gameState, responder);
+      }
+      
+      gameState.awaitingResponse = null;
+    } else {
+      // Player plays BANG!
+      const cardIndex = responder.hand.findIndex(c => c.id === bangCardId);
+      if (cardIndex === -1 || responder.hand[cardIndex].type !== CardTypes.BANG) {
+        throw new Error('Must play BANG! card');
+      }
+      
+      const card = responder.hand.splice(cardIndex, 1)[0];
+      gameState.discardPile.push(card);
+      gameState.gameLog.push(`${responder.name} plays BANG!`);
+      
+      // Switch to other player
+      const otherPlayerId = responder.id === gameState.awaitingResponse.challenger ? 
+        gameState.awaitingResponse.target : gameState.awaitingResponse.challenger;
+      
+      gameState.awaitingResponse.currentResponder = otherPlayerId;
+    }
+
+    return room;
+  }
+
+  handleIndians(gameState, player) {
+    gameState.gameLog.push(`${player.name} played Indians!`);
+    
+    // All other players must discard BANG! or lose 1 life
+    gameState.players.forEach(p => {
+      if (!p.isDead && p.id !== player.id) {
+        const bangCard = p.hand.find(c => c.type === CardTypes.BANG);
+        if (bangCard) {
+          const index = p.hand.indexOf(bangCard);
+          p.hand.splice(index, 1);
+          gameState.discardPile.push(bangCard);
+          gameState.gameLog.push(`${p.name} discards BANG!`);
+        } else {
+          p.life--;
+          gameState.gameLog.push(`${p.name} takes 1 damage from Indians`);
+          if (p.life <= 0) {
+            this.eliminatePlayer(gameState, p);
+          }
+        }
+      }
+    });
+  }
+
+  handleGatling(gameState, player) {
+    gameState.gameLog.push(`${player.name} played Gatling!`);
+    
+    // All other players must discard Missed! or lose 1 life
+    gameState.players.forEach(p => {
+      if (!p.isDead && p.id !== player.id) {
+        const missedCard = p.hand.find(c => c.type === CardTypes.MISSED);
+        if (missedCard) {
+          const index = p.hand.indexOf(missedCard);
+          p.hand.splice(index, 1);
+          gameState.discardPile.push(missedCard);
+          gameState.gameLog.push(`${p.name} discards Missed!`);
+        } else {
+          p.life--;
+          gameState.gameLog.push(`${p.name} takes 1 damage from Gatling`);
+          if (p.life <= 0) {
+            this.eliminatePlayer(gameState, p);
+          }
+        }
+      }
+    });
   }
 
   eliminatePlayer(gameState, player) {

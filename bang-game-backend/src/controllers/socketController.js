@@ -102,6 +102,22 @@ const handleSocketConnection = (io) => {
       }
     });
 
+    // Respond to Duel
+    socket.on('respondToDuel', ({ roomId, bangCardId }, callback) => {
+      try {
+        const room = gameService.respondToDuel(roomId, socket.id, bangCardId);
+        callback({ success: true });
+        io.to(roomId).emit('gameStateUpdated', room.gameState);
+        
+        // If still awaiting response, notify next player
+        if (room.gameState.awaitingResponse) {
+          io.to(room.gameState.awaitingResponse.currentResponder).emit('responseRequired', room.gameState.awaitingResponse);
+        }
+      } catch (error) {
+        callback({ success: false, error: error.message });
+      }
+    });
+
     // End turn
     socket.on('endTurn', ({ roomId }, callback) => {
       try {
