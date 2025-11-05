@@ -1,0 +1,55 @@
+{
+  "todos": {
+    "Coordinator": {
+      "1": {
+        "id": "1",
+        "content": "Set up GitHub repository with access token",
+        "details": "Create repository 'bang-game' and configure with user's access token from environment variables",
+        "status": "completed",
+        "priority": "high"
+      },
+      "2": {
+        "id": "2",
+        "content": "Design BANG! game architecture and technology stack",
+        "details": "Define client-server architecture, choose technologies (React frontend, Node.js backend with Socket.io), plan WebSocket communication protocol for room management and game state synchronization",
+        "status": "in_progress",
+        "priority": "high"
+      },
+      "3": {
+        "id": "3",
+        "content": "Implement backend server with WebSocket support",
+        "details": "Create Node.js/Express server with Socket.io integration. Implement room management (create/join rooms), player management, game state management, and WebSocket event handlers for real-time communication",
+        "status": "in_progress",
+        "priority": "high"
+      },
+      "4": {
+        "id": "4",
+        "content": "Develop BANG! game logic and rules engine",
+        "details": "Implement core BANG! game mechanics: player roles (Sheriff, Deputy, Outlaw, Renegade), card system (BANG!, Missed!, cards), character abilities, turn-based gameplay, victory conditions",
+        "status": "in_progress",
+        "priority": "high"
+      },
+      "5": {
+        "id": "5",
+        "content": "Build React frontend client",
+        "details": "Create responsive web interface with game board visualization, player cards display, card selection system, real-time game state updates, room lobby, and game status indicators",
+        "status": "in_progress",
+        "priority": "high"
+      },
+      "6": {
+        "id": "6",
+        "content": "Integrate WebSocket client-server communication",
+        "details": "Implement Socket.io client integration, event handlers for game actions (play cards, draw cards, target selection), real-time state synchronization, and error handling",
+        "status": "in_progress",
+        "priority": "medium"
+      },
+      "7": {
+        "id": "7",
+        "content": "Test game functionality and deploy",
+        "details": "Test multiplayer gameplay, room creation/joining, WebSocket reliability, game rules validation, and deploy to web server with proper configuration",
+        "status": "in_progress",
+        "priority": "medium"
+      }
+    }
+  }
+}
